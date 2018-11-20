@@ -32,7 +32,8 @@ import (
 var (
 	htmlContentType   = []string{"text/html; charset=utf-8"}
 	templateEngineKey = "github.com/foolin/gin-template/templateEngine"
-	DefaultConfig = TemplateConfig{
+	DefaultConfig     = TemplateConfig{
+		Lang:         "zh_CN",
 		Root:         "views",
 		Extension:    ".html",
 		Master:       "layouts/master",
@@ -44,9 +45,9 @@ var (
 )
 
 type TemplateEngine struct {
-	config   TemplateConfig
-	tplMap   map[string]*template.Template
-	tplMutex sync.RWMutex
+	config      TemplateConfig
+	tplMap      map[string]*template.Template
+	tplMutex    sync.RWMutex
 	fileHandler FileHandler
 }
 
@@ -57,6 +58,7 @@ type TemplateRender struct {
 }
 
 type TemplateConfig struct {
+	Lang         string           //language for i18n
 	Root         string           //view root
 	Extension    string           //template extension
 	Master       string           //template master
@@ -75,9 +77,9 @@ type FileHandler func(config TemplateConfig, tplFile string) (content string, er
 
 func New(config TemplateConfig) *TemplateEngine {
 	return &TemplateEngine{
-		config:   config,
-		tplMap:   make(map[string]*template.Template),
-		tplMutex: sync.RWMutex{},
+		config:      config,
+		tplMap:      make(map[string]*template.Template),
+		tplMutex:    sync.RWMutex{},
 		fileHandler: DefaultFileHandler(),
 	}
 }
@@ -105,6 +107,7 @@ func NewMiddleware(config TemplateConfig) gin.HandlerFunc {
 
 func Middleware(e *TemplateEngine) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Println("Middleware(e *TemplateEngine) ")
 		c.Set(templateEngineKey, e)
 	}
 }
@@ -156,6 +159,12 @@ func (e *TemplateEngine) executeTemplate(out io.Writer, name string, data interf
 	exeName := name
 	if useMaster && e.config.Master != "" {
 		exeName = e.config.Master
+		allFuncs["yield"] = func() (template.HTML, error) {
+			buf := new(bytes.Buffer)
+			err := tpl.ExecuteTemplate(buf, name, data)
+			// return safe html here since we are rendering our own template
+			return template.HTML(buf.String()), err
+		}
 	}
 
 	if !ok || e.config.DisableCache {
